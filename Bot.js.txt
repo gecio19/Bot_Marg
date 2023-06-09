@@ -1,0 +1,1274 @@
+
+// ==UserScript==
+// @name         Bot na exp
+// @version      1.88
+// @description  Bot z przechodzeniem przez mapki
+// @author
+// @match        *://*/
+// @match        *://www.margonem.pl/*
+// @grant        none
+// ==/UserScript==
+
+window.adiwilkTestBot = new function () {
+
+  const newNpcOldCopyAf = preNewNpc;
+  preNewNpc = function (npcs) {
+    for (var npc in npcs) {
+      if (
+        npcs[npc].del &&
+        g.npc[npc] &&
+        Math.abs(hero.x - g.npc[npc].x) + Math.abs(hero.y - g.npc[npc].y) > 13
+      ) {
+        delete npcs[npc];
+      }
+    }
+    newNpcOldCopyAf(npcs);
+  };
+
+
+  if (
+    typeof g == "undefined" &&
+    document.location.href.indexOf("jaruna.margonem.pl") > -1
+  ) {
+    document.location.reload();
+  }
+  //obiekt z nazwami expowisk                   //  map - po których lata bot   ,,, lvl - które moby ma bić ,
+  let expowiska = {
+                           "Mariusz Palikot | Werbin": {
+                               map: "5857,5858,5859,5858,5860,5858"
+                               , Lvl : "160-174"
+                               , Miasto : "Werbin"
+                               , Road: "9,355,356,357"
+
+
+                                              },
+
+                            "Pandzia| Torneg|Fubole": {
+                               map: "1111,1115,3734,3735,3736,3735,3734,1115,3733,1115,1111"
+                                , Lvl : "173-190"
+                               , Miasto : "Torneg"
+                               , Road: "2"
+
+
+
+
+                                            },
+       "Drzewce|Mythar": {
+                               map: "3594,3595,3624,3625,3623,3625,3622,3626,3627,3626,3622,3621,3620,3595,3596,3597,3614,3610,3611,3613,3615,3610,3597,3610,3615,3613,3611,3610,3612,3613,3612,3610,3614,3616,3597,3616,3614,3597,3598,3597,3596,3595"
+                                , Lvl : "235-242"
+                               , Miasto : "Mythar"
+                               , Road: "100000000000000000"
+
+
+
+
+                                            },
+
+  "Wiedźmy|Werbin": {
+                               map: "4050,4049,4050,4051,4052,4051,4050,4048,4053,4054,4053,4060,4058,4053,4055,4053,4061,4059,4062,4048,4062,4063,4064,4063,4062,4059,4053,4056,4053,4048"
+                                , Lvl : "245-255"
+                               , Miasto : "Werbin"
+                               , Road: "9,725,1293,1202,1294,1297,4048"
+
+
+
+
+                                            },
+        "Maho|Mythar": {
+                               map: "1960,1961,1962,1963,1964,1969,1970,1971,1970,1969,1964,1963,1962,1961,1960,1926,1924,1926,1901,1924,1926"
+                                , Lvl : "231-252"
+                               , Miasto : "Werbin"
+                               , Road: "257,3594,3595,3596,3597,1926"
+
+
+
+
+                                            },
+
+
+
+
+
+
+    "Nekropolia": {
+      map: "Grobowiec Rodziny Tywelta p.1, Grobowiec Rodziny Tywelta p.2"
+    },
+    "Demony": {
+      map: "Podziemia Siedziby Maga p.3 - sala 1, Podziemia Siedziby Maga p.3 - sala 2"
+    },
+    "Pustynia Shaiharroud": {
+      map: "Pustynia Shaiharrud - wschód, Jurta Nomadzka, Pustynia Shaiharrud - wschód, Grota Poświęcenia, Pustynia Shaiharrud - wschód, Namiot Pustynnych Smoków, Pustynia Shaiharrud - wschód, Pustynia Shaiharrud - zachód, Jaskinia Piaskowej Burzy s.1, Jaskinia Piaskowej Burzy s.2, Namiot Naznaczonych, Pustynia Shaiharrud - zachód, Namiot Piechoty Piłowej, Pustynia Shaiharrud - zachód, Jaskinia Szczęk, Jurta Czcicieli, Pustynia Shaiharrud - zachód, Namiot Gwardii Smokoszczękich, Pustynia Shaiharrud - zachód, Sępiarnia, Pustynia Shaiharrud - zachód, Jaskinia Smoczej Paszczy p.1, Jaskinia Smoczej Paszczy p.2, Jaskinia Smoczej Paszczy p.1, Jurta Chaegda, Pustynia Shaiharrud - zachód, Smocze Skalisko, Jaskinia Odwagi, Smocze Skalisko, Urwisko Vapora, Smocze Skalisko, Pustynia Shaiharrud - zachód"
+    }
+  };
+
+let Road_Tunia_0 = "344,347,2020,114";
+
+
+  //algorytm A*
+  class AStar {
+    constructor(
+      collisionsString,
+      width,
+      height,
+      start,
+      end,
+      additionalCollisions
+    ) {
+      this.width = width;
+      this.height = height;
+      this.collisions = this.parseCollisions(collisionsString, width, height);
+      this.additionalCollisions = additionalCollisions || {};
+      this.start = this.collisions[start.x][start.y];
+      this.end = this.collisions[end.x][end.y];
+      this.start.beginning = true;
+      this.start.g = 0;
+      this.start.f = heuristic(this.start, this.end);
+      this.end.target = true;
+      this.end.g = 0;
+      this.addNeighbours();
+      this.openSet = [];
+      this.closedSet = [];
+      this.openSet.push(this.start);
+    }
+
+    parseCollisions(collisionsString, width, height) {
+      const collisions = new Array(width);
+      for (let w = 0; w < width; w++) {
+        collisions[w] = new Array(height);
+        for (let h = 0; h < height; h++) {
+          collisions[w][h] = new Point(
+            w,
+            h,
+            collisionsString.charAt(w + h * width) === "1"
+          );
+        }
+      }
+      return collisions;
+    }
+
+    addNeighbours() {
+      for (let i = 0; i < this.width; i++) {
+        for (let j = 0; j < this.height; j++) {
+          this.addPointNeighbours(this.collisions[i][j]);
+        }
+      }
+    }
+
+    addPointNeighbours(point) {
+      const x = point.x,
+        y = point.y;
+      const neighbours = [];
+      if (x > 0) neighbours.push(this.collisions[x - 1][y]);
+      if (y > 0) neighbours.push(this.collisions[x][y - 1]);
+      if (x < this.width - 1) neighbours.push(this.collisions[x + 1][y]);
+      if (y < this.height - 1) neighbours.push(this.collisions[x][y + 1]);
+      point.neighbours = neighbours;
+    }
+
+    anotherFindPath() {
+      while (this.openSet.length > 0) {
+        let currentIndex = this.getLowestF();
+        let current = this.openSet[currentIndex];
+        if (current === this.end) return this.reconstructPath();
+        else {
+          this.openSet.splice(currentIndex, 1);
+          this.closedSet.push(current);
+          for (const neighbour of current.neighbours) {
+            if (this.closedSet.includes(neighbour)) continue;
+            else {
+              const tentative_score = current.g + 1;
+              let isBetter = false;
+              if (
+                this.end == this.collisions[neighbour.x][neighbour.y] ||
+                (!this.openSet.includes(neighbour) &&
+                  !neighbour.collision &&
+                  !this.additionalCollisions[neighbour.x + 256 * neighbour.y])
+              ) {
+                this.openSet.push(neighbour);
+                neighbour.h = heuristic(neighbour, this.end);
+                isBetter = true;
+              } else if (
+                tentative_score < neighbour.g &&
+                !neighbour.collision
+              ) {
+                isBetter = true;
+              }
+              if (isBetter) {
+                neighbour.previous = current;
+                neighbour.g = tentative_score;
+                neighbour.f = neighbour.g + neighbour.h;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    getLowestF() {
+      let lowestFIndex = 0;
+      for (let i = 0; i < this.openSet.length; i++) {
+        if (this.openSet[i].f < this.openSet[lowestFIndex].f) lowestFIndex = i;
+      }
+      return lowestFIndex;
+    }
+
+    reconstructPath() {
+      const path = [];
+      let currentNode = this.end;
+      while (currentNode !== this.start) {
+        path.push(currentNode);
+        currentNode = currentNode.previous;
+      }
+      return path;
+    }
+  }
+
+  class Point {
+    constructor(x, y, collision) {
+      this.x = x;
+      this.y = y;
+      this.collision = collision;
+      this.g = 10000000;
+      this.f = 10000000;
+      this.neighbours = [];
+      this.beginning = false;
+      this.target = false;
+      this.previous = undefined;
+    }
+  }
+
+  function heuristic(p1, p2) {
+    return Math.abs(p1.x - p2.x) + Math.abs(p1.y - p2.y);
+  }
+
+  function a_getWay(x, y) {
+    return new AStar(
+      map.col,
+      map.x,
+      map.y, {
+        x: hero.x,
+        y: hero.y
+      }, {
+        x: x,
+        y: y
+      },
+      g.npccol
+    ).anotherFindPath();
+  }
+
+
+
+
+
+
+
+
+
+
+  function a_goTo(x, y) {
+    let _road_ = a_getWay(x, y);
+    if (!Array.isArray(_road_)) return;
+    window.road = _road_;
+  }
+
+  //localStorage dla ostatnich mapek
+  if (!localStorage.getItem(`adi-bot_lastmaps`)) {
+    localStorage.setItem(`adi-bot_lastmaps`, JSON.stringify(new Array()));
+  }
+
+ if (!localStorage.getItem(`Miasto`)) {
+    localStorage.setItem(`Miasto`, "");
+  }
+ if (!localStorage.getItem(`Road_Tunia`)) {
+    localStorage.setItem(`Road_Tunia`, "");
+  }
+
+ if (!localStorage.getItem(`Tunia_ON`)) {
+    localStorage.setItem(`Tunia_ON`, "false");
+  }
+
+
+
+////////// MOje funkcje
+
+
+
+function checkBag()
+{
+    var element = document.getElementById("bs0");
+    var element1 = document.getElementById("bs1");
+    var element2 = document.getElementById("bs2");
+    if(element.innerText == 0 && element1.innerText == 0 && element2.innerText == 0)
+    {
+      return true;
+
+    }
+    else
+    {
+
+    return false;
+
+    }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+function noop() {};
+
+function Tp_tunia() {
+    Tp_tunia = noop;
+
+for (var i in g.item) {
+
+
+    for (var x in g.item) {
+            if (g.item[x].name.toLowerCase() == "zwój teleportacji na kwieciste przejście" )
+            {
+                var id_itemka_do_ucieczki = g.item[x].id;
+                _g("moveitem&st=1&id=" + id_itemka_do_ucieczki);
+                break;
+
+            }
+               else{}
+
+
+
+
+                         }
+
+
+
+
+            }
+
+}
+
+
+
+
+
+function Auto_heal()
+    {
+
+
+let a = document.querySelector("#life1").attributes[1].value;
+let b = a.replace('<B>Punkty życia:</B>','');
+let c = b.replaceAll(" ","");
+
+if(eval(c)*100 < 80) {
+
+
+
+
+    for (var x in g.item) {
+            if (g.item[x].name.toLowerCase() == "mikstura początkującego alchemika")
+            {
+                console.log("Miks");
+                var id_itemka_do_heal = g.item[x].id;
+                _g("moveitem&st=1&id=" + id_itemka_do_heal);
+                break;
+
+            }
+               else{}
+
+
+
+
+                         }
+
+
+       }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function sell()
+{
+    var liczydelko = 0;
+
+  	for(let i in g.item) {
+
+    if (g.item[i].cl != 16 && g.item[i].cl != 18 && g.item[i].cl != 22 && g.item[i].cl != 25 && g.item[i].name.toLowerCase() != "Mikstura początkującego alchemika" && g.item[i].name.toLowerCase() != "zwój teleportacji na kwieciste przejście" && g.item[i].name.toLowerCase() != "talizman trzeźwienia vi"   && g.item[i].name.toLowerCase() != "dowód odwagi"    && g.item[i].itemTypeName != 'heroic'    && g.item[i].itemTypeName != 'unique')
+		{
+  document.getElementById("item"+g.item[i].id).click();
+            liczydelko += 1;
+            if(liczydelko == 20)
+                  {
+           console.log("sell");
+                      liczydelko = 0;
+            document.querySelector("#shop_accept").click();
+                      i = 0;
+                   }
+
+        }
+	 else{}
+
+
+
+
+
+  			}
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+///////////// Koniec moich funkcji
+
+
+  let self = this;
+  let blokada = false;
+  let blokada2 = false;
+  let $m_id;
+  let herolx,
+    heroly,
+    increment = 0;
+
+  let bolcka = false;
+  let start = false;
+
+  g.loadQueue.push({
+    fun: () => {
+      start = true;
+    }
+  });
+
+  let deade = true;
+  let globalArray = new Array();
+
+  function addToGlobal(id) {
+    let npc = g.npc[id];
+    if (npc.grp) {
+      for (let i in g.npc) {
+        if (g.npc[i].grp == npc.grp && !globalArray.includes(g.npc[i].id)) {
+          globalArray.push(g.npc[i].id);
+        }
+      }
+    } else if (!globalArray.includes(id)) {
+      globalArray.push(id);
+    }
+  }
+
+  function chceckBlockade() {
+    for (let i in g.npc) {
+      let n = g.npc[i];
+      if (
+        (n.type == 2 || n.type == 3) &&
+        n.wt < 19 &&
+        checkGrp(n.id) &&
+        hero.lvl + 30 >= n.lvl &&
+        Math.abs(hero.x - n.x) < 2 &&
+        Math.abs(hero.y - n.y) < 2 &&
+        checkHeroHp()
+      ) {
+        return _g(`fight&a=attack&ff=1&id=-${n.id}`);
+      }
+    }
+  }
+
+  function getTime() {
+    let czas = new Date(),
+      godzina = czas.getHours(),
+      sekunda = czas.getSeconds(),
+      minuta = czas.getMinutes();
+    if (godzina < 10) godzina = `0${godzina}`;
+    if (minuta < 10) minuta = `0${minuta}`;
+    if (sekunda < 10) sekunda = `0${sekunda}`;
+    return `${godzina}:${minuta}:${sekunda}`;
+  }
+
+  //testowa opcja
+  setInterval(function () {
+    if ($m_id) {
+      $m_id = undefined;
+    }
+  }, 4000);
+  let $map_cords = undefined;
+  this.PI = parseInput;
+  parseInput = function (a) {
+
+
+
+
+   /////////////////////////////////////////////////////////// starter
+document.querySelector("#a_ok").click();
+var check_box_onon = localStorage.getItem("check_box_On");
+
+    let ret = self.PI.apply(this, arguments); //tutaj dodałem chwilowo poki nie daje rady xd
+    if (!g.battle && !g.dead && start && check_box_onon == "true") {
+
+
+
+Auto_heal();
+
+
+//// Tunia blok
+
+if(localStorage.getItem('Tunia_ON') == 'true')
+    {
+
+      var retrieved_Road_Tunia = localStorage.getItem("Road_Tunia");
+
+       var Road_To_Go_Tunia = Array.from(retrieved_Road_Tunia.split(','));
+
+
+
+
+for(let i =0 ; i < Road_To_Go_Tunia.length; i++)
+{
+
+if(map.id == Road_To_Go_Tunia[Road_To_Go_Tunia.length-1])
+   {}
+
+
+else{
+    if(map.id == Road_To_Go_Tunia[i])
+       {
+          let Road_cords_Tunia = g.gwIds[Road_To_Go_Tunia[i+1]];
+          let Road_Before_convert_Tunia = (Road_cords_Tunia.replace(".",","));
+        let Reoad_after_confert_Tunia = Road_Before_convert_Tunia.split(',');
+           a_goTo(parseInt(Reoad_after_confert_Tunia[0]),parseInt(Reoad_after_confert_Tunia[1]));
+          }
+             else
+             {}
+   }
+}
+
+
+
+if(map.id == 114)
+{
+
+    if(Math.abs(hero.x-g.npc[236624].x)>=1&&Math.abs(hero.y-g.npc[236624].y)>=1)
+    {
+
+     a_goTo(72,21);
+    }
+    else if (Math.abs(hero.x-g.npc[236624].x)<=1&&Math.abs(hero.y-g.npc[236624].y)<=1)
+    {
+
+
+
+      let Miasto_Do_tp = localStorage.getItem('Miasto');
+      __g('talk&id=236624');
+         if(document.getElementsByClassName("icon icon LINE_OPTION")[0].textContent == 'Chciałem się teleportować. ')
+      {
+          document.querySelector("#replies > li:nth-child(1)").click();
+      }
+
+
+
+else
+{
+
+        switch(Miasto_Do_tp)
+        {
+    case 'Werbin':
+        document.querySelector("#replies > li:nth-child(3)").click();
+        break
+
+     case 'Torneg':
+        document.querySelector("#replies > li:nth-child(2)").click();
+        break
+
+
+
+       }
+
+}
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+////
+
+var retrieved_Road = localStorage.getItem("Road");
+
+var Road_To_Go = JSON.parse(retrieved_Road);
+
+
+for(let i =0 ; i < Road_To_Go.length; i++)
+{
+
+if(map.id == Road_To_Go[Road_To_Go.length-1])
+   {}
+
+
+else{
+    if(map.id == Road_To_Go[i])
+       {
+          let Road_cords = g.gwIds[Road_To_Go[i+1]];
+          let Road_Before_convert = (Road_cords.replace(".",","));
+        let Reoad_after_confert =Road_Before_convert.split(',');
+           a_goTo(parseInt(Reoad_after_confert[0]),parseInt(Reoad_after_confert[1]));
+          }
+             else
+             {}
+   }
+}
+
+
+
+
+if(checkBag() == true && map.id != 353 && map.id !=344)
+           {
+             Tp_tunia();
+
+
+
+
+
+          }
+        else if(checkBag() == true && map.id == 344 )
+        {
+          console.log("Jestem przed tunia i mam full backpack");
+             a_goTo(20,17);
+        }
+        else if(checkBag() == true && map.id == 353 )
+        {
+          console.log("Jestem u tunii i mam full backpack");
+
+setTimeout(function() {
+    window.location.reload(true);
+
+
+
+}, 34000);
+
+
+
+
+            if(Math.abs(hero.x-g.npc[16366].x)<=1&&Math.abs(hero.y-g.npc[16366].y)<=1 && document.getElementById("item1768") == null)
+                {
+                    __g('talk&id=16366');
+                    document.querySelector("#replies > li:nth-child(1)").click();
+
+                }
+           else if(Math.abs(hero.x-g.npc[16366].x)<=1&&Math.abs(hero.y-g.npc[16366].y)<=1 && document.getElementById("item1768") != null)
+                {
+                    sell();
+                }
+
+
+
+            else if(Math.abs(hero.x-g.npc[16366].x)>=1&&Math.abs(hero.y-g.npc[16366].y)>=1)
+            {
+                 a_goTo(8,10);
+            }
+
+
+
+
+
+
+
+
+        }
+        else if(checkBag() == false && map.id == 353 )
+        {
+
+          a_goTo(9,12);
+            localStorage.setItem(`Tunia_ON`, "true");
+             localStorage.setItem(`Road_Tunia`, Road_Tunia_0);
+        //////////////////////////////////////////////////////////////////// road from tunia do miasta z tp //// pomyslec o patkach
+
+        }
+
+
+
+
+
+
+
+
+
+
+
+///
+
+
+
+
+
+
+
+
+
+
+
+
+
+      if (!$m_id && !bolcka) {
+        $m_id = self.findBestMob();
+        if (!$m_id && localStorage.getItem(`adi-bot_expowiska`)) {
+          let tmp_naj1,
+            tmp_naj2 = 9999;
+          if (expowiska[localStorage.getItem(`adi-bot_expowiska`)].mobs_id) {
+            let exP_mobs =
+              expowiska[localStorage.getItem(`adi-bot_expowiska`)].mobs_id;
+            for (let i in exP_mobs) {
+              if (g.npc[exP_mobs[i]]) {
+                tmp_naj1 = a_getWay(g.npc[exP_mobs[i]].x, g.npc[exP_mobs[i]].y)
+                  .length;
+                if (tmp_naj1 < tmp_naj2) {
+                  tmp_naj2 = tmp_naj1;
+                  $m_id = exP_mobs[i];
+                }
+              }
+            }
+          }
+        }
+        blokada2 = false;
+        blokada = false;
+      }
+      if ($m_id) {
+        let mob = g.npc[$m_id];
+        if (!mob) {
+          $m_id = undefined;
+          return ret;
+        }
+        if (
+          Math.abs(hero.x - mob.x) < 2 &&
+          Math.abs(hero.y - mob.y) < 2 &&
+          !blokada
+        ) {
+          blokada = true;
+          if (checkGrp(mob.id)) {
+            _g(`fight&a=attack&ff=1&id=-${mob.id}`, function (res) {
+              //sprawdzenie czy walczy z innym
+              if (
+                res.alert &&
+                res.alert == `Przeciwnik walczy już z kimś innym`
+              ) {
+                addToGlobal(mob.id);
+                $m_id = undefined;
+              }
+            });
+          }
+          setTimeout(function () {
+            $m_id = undefined;
+          }, 500);
+        } else if (!blokada2 && !blokada) {
+          a_goTo(mob.x, mob.y);
+          blokada2 = true;
+        }
+      } else if (document.querySelector(`#adi-bot_maps`).value.length > 0) {
+        //g.gwIds - obiekt id mapy i kordy -> 1: `1.13`
+        //g.townname - obiekt id mapy i nazwa -> 1: `Ithan`
+        $map_cords = self.findBestGw();
+        if ($map_cords && !bolcka) {
+          if (hero.x == $map_cords.x && hero.y == $map_cords.y) {
+            _g(`walk`);
+          } else {
+            a_goTo($map_cords.x, $map_cords.y);
+            bolcka = true;
+            setTimeout(function () {
+              bolcka = false;
+            }, 2000);
+          }
+        }
+      }
+
+      if (heroly == hero.y && herolx == herolx) {
+        increment++;
+        if (increment > 4) {
+          chceckBlockade();
+          increment = 0;
+          $m_id = undefined;
+          $map_cords = undefined;
+          bolcka = false;
+        }
+      } else {
+        heroly = hero.y;
+        herolx = hero.x;
+        increment = 0;
+      }
+    }
+
+  ///////////////////////////////////////// koniec
+
+    //rozpoczecie walki
+    if (a.hasOwnProperty("f") && a.f.init == 1 && hero.clan > 0) {
+      if (!Object.keys(a.f.w).some(id => id < 0)) {
+        const team1 = [],
+          team2 = [];
+        for (let x of Object.values(a.f.w))
+          (x.team == 1 && team1.push(`${x.name} ${x.lvl}${x.prof}`)) ||
+          team2.push(`${x.name} ${x.lvl}${x.prof} `);
+        if (
+          a.f.myteam == 2 &&
+          document.querySelector(`#adi-bot_maps`).value.indexOf(map.name) > -1
+        ) {
+          const msg = `Zostałem zaatakowany na mapie ${
+            map.name
+          } o godzinie ${getTime()}.\n${team1.join(", ")} vs. ${team2.join(
+            ", "
+          )}`;
+        }
+      }
+    }
+    return ret;
+  };
+
+  function checkGrp(id) {
+    if (g.npc[id].grp) {
+      //tutaj
+      if (
+        !checke2(g.npc[id].grp) ||
+        (expowiska[localStorage.getItem(`adi-bot_expowiska`)].ignore_grp &&
+          expowiska[
+            localStorage.getItem(`adi-bot_expowiska`)
+          ].ignore_grp.includes(g.npc[id].grp))
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function checke2(grpid) {
+    for (let i in g.npc) {
+      if (g.npc[i].grp == grpid && g.npc[i].wt > 19) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function checkHeroHp() {
+    if ((hero.hp / hero.maxhp) * 100 > 70) {
+      return true;
+    }
+    return false;
+  }
+
+  this.findBestMob = function () {
+    let b1,
+      b2 = 9999,
+      id;
+    for (let i in g.npc) {
+      let n = g.npc[i];
+      let xxx;
+      let min;
+      let max;
+      if (document.querySelector(`#adi-bot_mobs`).value.indexOf(`-`) > -1) {
+        xxx = document.querySelector(`#adi-bot_mobs`).value.split(`-`);
+        min = parseInt(xxx[0]);
+        max = parseInt(xxx[1]);
+      }
+
+      if (
+        (n.type == 2 || n.type == 3) &&
+        xxx &&
+        n.lvl <= max &&
+        n.lvl >= min &&
+        checkGrp(n.id) &&
+        !globalArray.includes(n.id) &&
+        n.wt < 20
+      ) {
+        b1 = a_getWay(n.x, n.y);
+        if (b1 == undefined) continue;
+        if (b1.length < b2) {
+          b2 = b1.length;
+          id = n.id;
+        }
+      }
+    }
+    return id;
+  };
+
+  if (!localStorage.getItem(`alksjd`)) {
+    localStorage.setItem(`alksjd`, 0);
+  }
+
+
+
+
+
+
+
+
+  this.findBestGw = function () {
+    let obj,
+      txt = document.querySelector(`#adi-bot_maps`).value.split(`,`),
+      inc = parseInt(localStorage.getItem(`alksjd`));
+
+    for (let i in g.townname) {
+      //bo admini daja podwojna spacje w nazwach mapy??????
+        console.log("Next_map" + txt[inc] + "     To jest" + i );
+      if (txt[inc] == i) {
+
+        let c = g.gwIds[i].split(`.`);
+        if (a_getWay(c[0], c[1]) == undefined) continue;
+        obj = {
+          x: c[0],
+          y: c[1]
+        };
+      }
+      if (obj) {
+        return obj;
+      }
+    }
+    inc++;
+    if (inc > txt.length) {
+      inc = 0;
+    }
+    localStorage.setItem(`alksjd`, parseInt(inc));
+  };
+
+  this.initHTML = function () {
+    //localStorage pozycji
+    if (!localStorage.getItem(`adi-bot_position`)) {
+      let tmpobj = {
+        x: 0,
+        y: 0
+      };
+      localStorage.setItem(`adi-bot_position`, JSON.stringify(tmpobj));
+    }
+    let position = JSON.parse(localStorage.getItem(`adi-bot_position`));
+
+    //boxy
+    let box = document.createElement(`div`);
+    box.id = `adi-bot_box`;
+    box.setAttribute(`tip`, `Złap i przenieś :)`);
+
+
+
+
+       let input0 = document.createElement(`input`);
+      input0.type = "checkbox";
+       input0.name = "checkbox_on";
+      input0.id = "checkbox_on";
+      box.appendChild(input0);
+
+
+
+
+
+
+
+
+
+
+    let input1 = document.createElement(`input`);
+    input1.type = `text`;
+    input1.id = `adi-bot_mobs`;
+    input1.classList.add(`adi-bot_inputs`);
+    input1.setAttribute(`tip`, `Wprowadź lvl mobków w postaci np. '50-70'`);
+    box.appendChild(input1);
+
+
+
+
+
+
+
+
+    let input2 = document.createElement(`input`);
+    input2.type = `text`;
+    input2.id = `adi-bot_maps`;
+    input2.classList.add(`adi-bot_inputs`);
+    input2.setAttribute(`tip`, `Wprowadź nazwy map`);
+    box.appendChild(input2);
+
+    let select = document.createElement(`select`);
+    select.id = `adi-bot_list`;
+    select.classList.add(`adi-bot_inputs`);
+    select.setAttribute(
+      `tip`,
+      `Wybierz expowisko, aby dodatek wpisał mapy za Ciebie`
+    );
+    for (let i = 0; i < Object.keys(expowiska).length; i++) {
+      let option = document.createElement(`option`);
+      option.setAttribute(`value`, Object.keys(expowiska)[i]);
+      option.text = Object.keys(expowiska)[i];
+      select.appendChild(option);
+    }
+    box.appendChild(select);
+
+    document.body.appendChild(box);
+
+    let style = document.createElement(`style`);
+    style.type = `text/css`;
+    let css = `
+            #adi-bot_box {
+               position: absolute;
+               border: 3px solid lime;
+              padding: 5px;
+              text-align: center;
+               background: url(http://i.imgur.com/iQISZHL.png);
+               cursor: grab;
+               left: ${position.x}px;
+               top: ${position.y}px;
+              width: auto;
+               height: auto;
+               z-index: 390;
+             }
+            .adi-bot_inputs {
+                -webkit-box-sizing: content-box;
+                -moz-box-sizing: content-box;
+                box-sizing: content-box;
+                margin: 0 auto;
+                margin-bottom: 3px;
+                padding: 2px;
+                cursor: pointer;
+                border: 2px solid lime;
+                -webkit-border-radius: 5px;
+                border-radius: 5px;
+                font: normal 16px/normal "Comic Sans MS", Times, serif;
+                color: #000;
+                -o-text-overflow: clip;
+                text-overflow: clip;
+                background: rgba(234,227,227,1);
+                -webkit-box-shadow: 2px 2px 2px 0 rgba(0,0,0,0.2) inset;
+                box-shadow: 2px 2px 2px 0 rgba(0,0,0,0.2) inset;
+                text-shadow: 1px 1px 0 rgba(255,255,255,0.66) ;
+                display: block;
+              }
+              input[id=adi-bot_mobs] {
+                  text-align: center;
+              }
+              #adi-bot_blessingbox {
+                  border: 1px solid red;
+                  background: gray;
+                  height: 32px;
+                  width: 32px;
+                  margin: 0 auto;
+              }
+        `;
+    style.appendChild(document.createTextNode(css));
+    document.head.appendChild(style);
+
+    bB = () => {};
+
+    var oldBattleMsgAFC = battleMsg;
+    battleMsg = function (c, t) {
+      var ret = oldBattleMsgAFC(c, t);
+      if (c.search(/winner=/) >= 0) {
+        $("#battleclose").click();
+      }
+      return ret;
+    };
+
+    var oldFight = fight;
+    fight = f => {
+      oldFight(f);
+      if (f.init) _g("fight&a=f");
+    };
+
+    document.addEventListener("keyup", async function (e) {
+      if (
+        e.target.tagName != "INPUT" &&
+        e.target.tagName != "TEXTAREA" &&
+        e.which == 90 &&
+        !g.battle
+      ) {
+        if (!g.engineStopped && parseInput !== window.adiwilkTestBot.PI) {
+          window.adiwilkTestBot.copyPI = parseInput;
+          parseInput = window.adiwilkTestBot.PI;
+          a_goTo(hero.x, hero.y);
+          message("Bot zatrzymany");
+        } else {
+          parseInput = window.adiwilkTestBot.copyPI;
+          message("Bot uruchomiony");
+        }
+      }
+    });
+
+    //localStorage dla mobów i mapek
+    if (localStorage.getItem(`adi-bot_mobs`)) {
+      input1.value = localStorage.getItem(`adi-bot_mobs`);
+    }
+
+
+
+
+
+
+
+
+ if (localStorage.getItem(`check_box_On`)) {
+
+var checked = JSON.parse(localStorage.getItem("check_box_On"));
+
+     input0.checked = checked;
+
+    }
+
+
+
+
+
+    if (localStorage.getItem(`adi-bot_maps`)) {
+      input2.value = localStorage.getItem(`adi-bot_maps`);
+    }
+    if (localStorage.getItem(`adi-bot_expowiska`)) {
+      if (expowiska[localStorage.getItem(`adi-bot_expowiska`)]) {
+        select.value = localStorage.getItem(`adi-bot_expowiska`);
+      }
+    }
+    //listenery
+
+
+  input0.addEventListener(`change`, () => {
+      localStorage.setItem(`check_box_On`, input0.checked);
+
+    });
+
+
+
+    input1.addEventListener(`keyup`, () => {
+      localStorage.setItem(`adi-bot_mobs`, input1.value);
+    });
+
+
+
+
+
+    input2.addEventListener(`keyup`, () => {
+      localStorage.setItem(`adi-bot_maps`, input2.value);
+
+    });
+
+
+
+
+     select.addEventListener(`change`, () => {
+      localStorage.setItem(`adi-bot_expowiska`, select.value);
+      input2.value = expowiska[select.value].map;
+      input1.value = expowiska[select.value].Lvl; // dodałem
+      localStorage.setItem(`Miasto`,expowiska[select.value].Miasto);
+
+//
+
+        let arr = expowiska[select.value].Road.split(',');
+        localStorage.setItem(`Road`, JSON.stringify(arr));
+
+//
+      localStorage.setItem(`adi-bot_maps`, input2.value);
+
+       localStorage.setItem(`adi-bot_mobs`, input1.value);
+      localStorage.setItem(`alksjd`, 0);
+
+
+
+
+
+
+
+
+      message(`Zapisano expowisko "${select.value}"`);
+    });
+
+    $(`#adi-bot_box`).draggable({
+      stop: () => {
+        let tmpobj = {
+          x: parseInt(document.querySelector(`#adi-bot_box`).style.left),
+          y: parseInt(document.querySelector(`#adi-bot_box`).style.top)
+        };
+        localStorage.setItem(`adi-bot_position`, JSON.stringify(tmpobj));
+        message(`Zapisano pozycję`);
+      }
+    });
+  };
+  this.initHTML();
+}();
